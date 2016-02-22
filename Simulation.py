@@ -24,14 +24,14 @@ risk = 5
 sim = 10000
 
 # Adjust historic drilling prices for inflation
-p = pd.merge(drill_cost, cpi, on='Year')
-p['inflation'] = p['Avg']/cpi_now
+cost = pd.merge(drill_cost, cpi, on='Year')
+cost['inflation'] = cost['Avg']/cpi_now
 
-p['Oil'] = 1000*p['Oil']/p['inflation']
-p['Nat. Gas'] = 1000*p['Nat. Gas']/p['inflation']
-p['Dry Well'] = 1000*p['Dry Well']/p['inflation']
+cost['Oil'] = 1000 * cost['Oil'] / cost['inflation']
+cost['Nat. Gas'] = 1000 * cost['Nat. Gas'] / cost['inflation']
+cost['Dry Well'] = 1000 * cost['Dry Well'] / cost['inflation']
 
-p10 = p[(p['Year'] >= 1990)]
+cost90 = cost[ ( cost['Year'] >= 1990 ) ]
 
 # Calculate mean geometric rate of change for each drilling class
 def geo_diff(x):
@@ -41,19 +41,19 @@ def geo_diff(x):
     y = x.shift(1)
 
     for i in x:
-        n.append(ma.log(i))       
+        n.append( ma.log(i) )       
     for i in y:
-        m.append(ma.log(i))
-    for i in range(len(x)):
-        o.append(n[i] - m[i])
+        m.append( ma.log(i) )
+    for i in range( len(x) ):
+        o.append( n[i] - m[i] )
     return np.nanmean(o), np.nanstd(o)
 
-d_oil_mean, d_oil_std = geo_diff(p10['Oil'])
-d_gas_mean, d_gas_std = geo_diff(p10['Nat. Gas'])
-d_dry_mean, d_dry_std = geo_diff(p10['Dry Well'])
+d_oil_mean, d_oil_std = geo_diff( cost90['Oil'] )
+d_gas_mean, d_gas_std = geo_diff( cost90['Nat. Gas'] )
+d_dry_mean, d_dry_std = geo_diff( cost90['Dry Well'] )
 
 # Cholesky decomposoition to correlate initial production and decline rate
-corr = np.matrix( [[1, rho], [rho, 1]] )
+corr = np.matrix( [ [1, rho], [rho, 1] ] )
 cholesky = np.transpose( np.linalg.cholesky(corr) )
 
 # Generate 'mean' and 'std' for uniform decline rate
@@ -82,5 +82,16 @@ for i in range(well_num):
 
 dry_well = well_num - oil_well
 
+# Simulatees drilling cost from end of historic data up to present year
+cost_oil = cost[ ( cost['Year']==2006 ) ]['Oil']
+cost_gas = cost[ ( cost['Year']==2006 ) ]['Nat. Gas']
+cost_dry = cost[ ( cost['Year']==2006 ) ]['Dry Well']
+for i in range(2006,year_now):
+    cost_oil = ma.exp( rn.normal(d_oil_mean, d_oil_std) + ma.log(cost_oil) )
+    cost_gas = ma.exp( rn.normal(d_gas_mean, d_gas_std) + ma.log(cost_gas) )
+    cost_dry = ma.exp( rn.normal(d_dry_mean, d_dry_std) + ma.log(cost_dry) )
 
-
+# Initial costs
+cost_acre = rn.normal(12000, 1000) * 960
+cost_seis = rn.normal(50, 10) * 43000
+cost_0 = cost_acre + cost_seis + cost_oil * oil_well + cost_dry * dry_well
